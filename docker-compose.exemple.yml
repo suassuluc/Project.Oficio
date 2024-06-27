@@ -1,0 +1,84 @@
+version: "3.7"
+services:
+  ofic_ng:
+    image: nginx:alpine
+    container_name: ofic_ng
+    restart: always
+    ports:
+      - "8087:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx:/etc/nginx/conf.d
+      - ./docker/logs/nginx:/var/log/nginx/
+    networks:
+      - ofic
+
+  ofic_php:
+    image: fapema/php:8.1-fpm
+    container_name: ofic_php
+    restart: always
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    networks:
+      - ofic
+
+  ofic_sql:
+    image: 'mysql:8.0'
+    container_name: ofic_sql
+    ports:
+      - '${FORWARD_DB_PORT:-33065}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_DATABASE: '${DB_DATABASE}'
+      #MYSQL_USER: '${DB_USERNAME}'
+      MYSQL_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+    volumes:
+      - ./docker/.dbdata:/var/lib/mysql
+    networks:
+      - ofic
+
+    # queue
+  ofic_qu:
+    image: fapema/php:8.1-fpm
+    container_name: ofic_qu
+    restart: always
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    command: "php artisan queue:work"
+    depends_on:
+      - ofic_sql
+    networks:
+      - ofic
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: ofic_phpmyadmin
+    restart: always
+    ports:
+      - '8007:80'
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=ofic_sql
+      - PMA_USER=${DB_USERNAME}
+      - PMA_PASSWORD=${DB_PASSWORD}
+      - PMA_DATABASE=${DB_DATABASE}
+    networks:
+      - ofic
+
+  ofic_node:
+    image: node:14.16-alpine3.13
+    container_name: ofic_node
+    restart: unless-stopped
+    tty: true
+    working_dir: /opt
+    volumes:
+      - ./:/opt
+    networks:
+      - ofic
+
+networks:
+  ofic:
+    driver: bridge
